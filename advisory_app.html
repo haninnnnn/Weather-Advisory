@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Farm Weather Advisory</title>
+<style>
+  :root {
+    --bg: #f3f5f2;
+    --surface: #ffffff;
+    --ink: #17202a;
+    --muted: #5b6672;
+    --line: #dde3dd;
+    --primary: #0e5e5c;
+    --primary-ink: #ffffff;
+    --go-fg: #1d6b43;   --go-bg: #e2f3e9;
+    --care-fg: #7a4f00; --care-bg: #fcefd2;
+    --avoid-fg: #9d2a21; --avoid-bg: #fbe3df;
+    --focus: #0e5e5c;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1716; --surface: #162120; --ink: #e6eeeb; --muted: #9fb0aa;
+      --line: #2a3a37; --primary: #5fb8b3; --primary-ink: #0f1716;
+      --go-fg: #8fd6ab;   --go-bg: #1d3a2b;
+      --care-fg: #f2cf85; --care-bg: #3a2f17;
+      --avoid-fg: #ffa39a; --avoid-bg: #3d1f1b;
+      --focus: #5fb8b3; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1716; --surface: #162120; --ink: #e6eeeb; --muted: #9fb0aa;
+    --line: #2a3a37; --primary: #5fb8b3; --primary-ink: #0f1716;
+    --go-fg: #8fd6ab;   --go-bg: #1d3a2b;
+    --care-fg: #f2cf85; --care-bg: #3a2f17;
+    --avoid-fg: #ffa39a; --avoid-bg: #3d1f1b;
+    --focus: #5fb8b3; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 "Segoe UI", Inter, system-ui, -apple-system, Roboto, sans-serif;
+    padding: 28px max(16px, env(safe-area-inset-right,0px)) 48px max(16px, env(safe-area-inset-left,0px));
+  }
+  .wrap { max-width: 960px; margin: 0 auto; display: grid; gap: 18px; }
+
+  /* ---- masthead ---- */
+  .masthead {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; padding-bottom: 10px; border-bottom: 2px solid var(--primary);
+  }
+  .masthead-text h1 { margin: 0; font-size: 1.75rem; line-height: 1.15; letter-spacing: -0.01em; }
+  .masthead-text p  { margin: 0; color: var(--muted); }
+  .masthead-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+  /* SDG badges */
+  .sdg-badges { display: flex; gap: 6px; }
+  .sdg { font-size: 0.72rem; font-weight: 700; padding: 3px 7px; border-radius: 4px;
+         letter-spacing: 0.04em; white-space: nowrap; }
+  .sdg-2  { background: #dca742; color: #000; }
+  .sdg-13 { background: #3f7e44; color: #fff; }
+
+  /* ---- grid ---- */
+  .grid-2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.4fr); gap: 18px; align-items: start; }
+  @media (max-width: 760px) { .grid-2 { grid-template-columns: minmax(0,1fr); } }
+
+  /* ---- cards ---- */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; min-width: 0; }
+  .card h2 { margin: 0 0 12px; font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
+             color: var(--muted); font-weight: 700; }
+
+  /* ---- form fields ---- */
+  .field { display: grid; gap: 6px; margin-bottom: 12px; }
+  .field:last-of-type { margin-bottom: 0; }
+  .field label { font-weight: 600; }
+  .field select, .field input[type="text"] {
+    width: 100%; font: inherit; padding: 9px 10px;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--ink);
+  }
+  .field select { cursor: pointer; }
+
+  /* ---- readings grid ---- */
+  .readings { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+  @media (max-width: 480px) { .readings { grid-template-columns: minmax(0,1fr); } }
+  .reading { border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; gap: 6px; min-width: 0; }
+  .reading .name { font-size: 0.85rem; color: var(--muted); }
+  .reading .row  { display: flex; align-items: baseline; gap: 6px; }
+  .reading input {
+    width: 100%; min-width: 0; font: inherit; font-size: 1.35rem; font-weight: 700;
+    font-variant-numeric: tabular-nums; padding: 2px 0; border: 0;
+    border-bottom: 2px solid var(--line); background: transparent; color: var(--ink); border-radius: 0;
+  }
+  .reading input:focus-visible, input:focus-visible, button:focus-visible, select:focus-visible {
+    outline: 2px solid var(--focus); outline-offset: 2px;
+  }
+  .reading .unit { color: var(--muted); white-space: nowrap; }
+  .tag { justify-self: start; font-size: 0.78rem; font-weight: 600; padding: 2px 8px;
+         border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+
+  /* ---- buttons ---- */
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line);
+           background: var(--bg); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); font-weight: 600; }
+  button.icon-btn { padding: 7px 10px; font-size: 1rem; }
+  .sample { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sample button { font-size: 0.86rem; padding: 6px 10px; }
+
+  /* ---- status / error ---- */
+  .status { min-height: 1.4em; margin: 10px 0 0; color: var(--muted); font-size: 0.9rem; }
+  .error  { margin: 10px 0 0; padding: 9px 11px; border-radius: 6px;
+            background: var(--avoid-bg); color: var(--avoid-fg); display: none; }
+  .error.show { display: block; }
+
+  /* ---- advisory output ---- */
+  .summary { font-size: 1.05rem; margin: 0 0 14px; font-weight: 600; }
+  .alerts  { display: grid; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
+  .alerts li { padding: 10px 12px; border-radius: 6px; background: var(--avoid-bg); color: var(--avoid-fg); }
+
+  .plan { list-style: none; margin: 0; padding: 0; display: grid; }
+  .plan li {
+    display: grid; grid-template-columns: 96px minmax(0,1fr); gap: 12px;
+    padding: 12px 0; border-top: 1px solid var(--line); align-items: start;
+  }
+  .plan li:first-child { border-top: 0; padding-top: 0; }
+  .plan .act { font-weight: 600; }
+  .plan .why { color: var(--muted); font-size: 0.93rem; margin-top: 2px; }
+  @media (max-width: 480px) { .plan li { grid-template-columns: minmax(0,1fr); gap: 6px; } }
+
+  .pill { justify-self: start; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em;
+          padding: 4px 9px; border-radius: 4px; }
+  .pill.GO     { color: var(--go-fg);   background: var(--go-bg);   }
+  .pill.CAUTION { color: var(--care-fg); background: var(--care-bg); }
+  .pill.AVOID  { color: var(--avoid-fg); background: var(--avoid-bg); }
+
+  .notes { margin: 16px 0 0; padding: 12px 14px; border-left: 3px solid var(--primary);
+           background: var(--bg); border-radius: 0 6px 6px 0; }
+  .notes p { margin: 0; }
+  .notes p + p { margin-top: 6px; }
+
+  /* crop notes section */
+  .crop-notes { margin: 16px 0 0; padding: 12px 14px; border-left: 3px solid #0e9e5c;
+                background: var(--bg); border-radius: 0 6px 6px 0; }
+  .crop-notes h3 { margin: 0 0 8px; font-size: 0.8rem; text-transform: uppercase;
+                   letter-spacing: 0.07em; color: var(--muted); }
+  .crop-notes p  { margin: 0; }
+  .crop-notes p + p { margin-top: 6px; }
+
+  /* ---- 7-day outlook table ---- */
+  .outlook-wrap { overflow-x: auto; }
+  .outlook { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+  .outlook th { text-align: left; padding: 6px 10px; border-bottom: 2px solid var(--line);
+                font-size: 0.78rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+  .outlook td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .outlook tr:last-child td { border-bottom: 0; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .dot.GO     { background: var(--go-fg); }
+  .dot.CAUTION { background: var(--care-fg); }
+  .dot.AVOID  { background: var(--avoid-fg); }
+
+  /* ---- footer ---- */
+  .foot { color: var(--muted); font-size: 0.85rem; margin: 0; }
+
+  /* ---- print ---- */
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff; color: #000; padding: 0; }
+    .card { border: 1px solid #ccc; break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+  <!-- ===== Masthead ===== -->
+  <header class="masthead">
+    <div class="masthead-text">
+      <h1>Farm Weather Advisory</h1>
+      <p>Turns today's weather into a field plan — what to do, what to hold off, and why.</p>
+    </div>
+    <div class="masthead-actions no-print">
+      <div class="sdg-badges" title="Supports UN Sustainable Development Goals">
+        <span class="sdg sdg-2"  title="SDG 2 — Zero Hunger">SDG 2</span>
+        <span class="sdg sdg-13" title="SDG 13 — Climate Action">SDG 13</span>
+      </div>
+      <button class="icon-btn" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark/light mode">🌙</button>
+      <button class="icon-btn no-print" onclick="window.print()" title="Print advisory">🖨️</button>
+    </div>
+  </header>
+
+  <!-- ===== Input row ===== -->
+  <div class="grid-2">
+
+    <!-- Live weather fetch -->
+    <section class="card no-print" aria-labelledby="live-h">
+      <h2 id="live-h">Get today's weather</h2>
+      <form id="live-form" novalidate>
+        <div class="field">
+          <label for="place">Place name</label>
+          <input id="place" type="text" placeholder="e.g. Udupi" autocomplete="off">
+        </div>
+        <div class="actions">
+          <button class="primary" type="submit">Fetch weather</button>
+          <button type="button" id="locate">Use my location</button>
+        </div>
+      </form>
+      <p class="status" id="live-status" aria-live="polite"></p>
+      <p class="error"  id="live-error"  role="alert"></p>
+      <p class="foot" style="margin-top:14px">Needs internet. Works when this file is opened locally, not from a published link.</p>
+    </section>
+
+    <!-- Readings + Crop selector -->
+    <section class="card" aria-labelledby="read-h">
+      <h2 id="read-h">Readings</h2>
+      <form id="form" novalidate>
+        <div class="readings">
+          <div class="reading">
+            <span class="name">Temperature</span>
+            <div class="row"><input id="temperature_c" type="number" step="any" inputmode="decimal" min="-60" max="60" aria-label="Temperature °C"><span class="unit">°C</span></div>
+            <span class="tag" id="tag-temperature_c"></span>
+          </div>
+          <div class="reading">
+            <span class="name">Rainfall today</span>
+            <div class="row"><input id="rainfall_mm" type="number" step="any" inputmode="decimal" min="0" max="1000" aria-label="Rainfall mm"><span class="unit">mm</span></div>
+            <span class="tag" id="tag-rainfall_mm"></span>
+          </div>
+          <div class="reading">
+            <span class="name">Humidity</span>
+            <div class="row"><input id="humidity_pct" type="number" step="any" inputmode="decimal" min="0" max="100" aria-label="Humidity %"><span class="unit">%</span></div>
+            <span class="tag" id="tag-humidity_pct"></span>
+          </div>
+          <div class="reading">
+            <span class="name">Wind speed</span>
+            <div class="row"><input id="wind_speed_kmh" type="number" step="any" inputmode="decimal" min="0" max="300" aria-label="Wind speed km/h"><span class="unit">km/h</span></div>
+            <span class="tag" id="tag-wind_speed_kmh"></span>
+          </div>
+        </div>
+        <p class="error" id="error" role="alert"></p>
+      </form>
+
+      <!-- Crop selector -->
+      <div class="field" style="margin-top:14px">
+        <label for="crop-select">Crop (optional)</label>
+        <select id="crop-select" aria-label="Select crop for specific advice">
+          <option value="">— General advisory —</option>
+          <option value="rice">Rice (Paddy)</option>
+          <option value="wheat">Wheat</option>
+          <option value="maize">Maize (Corn)</option>
+          <option value="tomato">Tomato</option>
+          <option value="groundnut">Groundnut (Peanut)</option>
+          <option value="sugarcane">Sugarcane</option>
+        </select>
+      </div>
+
+      <div class="actions sample no-print" style="margin-top:16px" aria-label="Example days">
+        <button type="button" data-preset="hot">Hot &amp; dry</button>
+        <button type="button" data-preset="wet">Heavy rain</button>
+        <button type="button" data-preset="cold">Cold night</button>
+        <button type="button" data-preset="normal">Mild day</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== Advisory output ===== -->
+  <section class="card" aria-labelledby="plan-h">
+    <h2 id="plan-h">Plan for today</h2>
+    <div id="result" aria-live="polite"></div>
+  </section>
+
+  <!-- ===== 7-day outlook (populated only after a live fetch) ===== -->
+  <section class="card no-print" id="outlook-section" style="display:none" aria-labelledby="outlook-h">
+    <h2 id="outlook-h">7-Day Outlook</h2>
+    <div class="outlook-wrap">
+      <table class="outlook" id="outlook-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Max °C</th>
+            <th>Rain mm</th>
+            <th>Humidity %</th>
+            <th>Wind km/h</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody id="outlook-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="foot">Thresholds are illustrative defaults. Confirm them with a local agronomist before acting on them.</p>
+</main>
+
+<script>
+"use strict";
+
+// ---- Thresholds (mirror advisory.py) ------------------------------------
+const T = { COLD: 10, HEAT: 35, DRY: 2, HEAVY: 20, VHEAVY: 50, HHIGH: 80, HLOW: 30, WIND: 25 };
+const LIMITS = {
+  temperature_c: [-60, 60], rainfall_mm: [0, 1000],
+  humidity_pct: [0, 100],   wind_speed_kmh: [0, 300],
+};
+const LABELS = {
+  temperature: { cold: "Cold", heat: "Heat stress", comfortable: "Comfortable" },
+  rainfall:    { very_heavy: "Very heavy", heavy: "Heavy", moderate: "Moderate", dry: "Dry" },
+  humidity:    { high: "High", low: "Low", moderate: "Moderate" },
+  wind:        { strong: "Strong", calm: "Calm" },
+};
+const PRESETS = {
+  hot:    { temperature_c: 37, rainfall_mm: 0,  humidity_pct: 22, wind_speed_kmh: 30 },
+  wet:    { temperature_c: 18, rainfall_mm: 65, humidity_pct: 88, wind_speed_kmh: 12 },
+  cold:   { temperature_c: 8,  rainfall_mm: 1,  humidity_pct: 60, wind_speed_kmh: 5  },
+  normal: { temperature_c: 25, rainfall_mm: 5,  humidity_pct: 55, wind_speed_kmh: 10 },
+};
+const STATUS_TEXT = { GO: "GO", CAUTION: "WITH CARE", AVOID: "AVOID" };
+
+// ---- Crop profiles (mirror crop_advisory.py) ----------------------------
+const CROP_PROFILES = {
+  rice:       { name: "Rice (Paddy)",       optLow: 22, optHigh: 35, minRain: 5.0, waterlogRisk: false, droughtSensitive: true,  fungalRH: 75 },
+  wheat:      { name: "Wheat",              optLow: 10, optHigh: 25, minRain: 1.0, waterlogRisk: true,  droughtSensitive: false, fungalRH: 70 },
+  maize:      { name: "Maize (Corn)",       optLow: 18, optHigh: 32, minRain: 2.5, waterlogRisk: true,  droughtSensitive: true,  fungalRH: 80 },
+  tomato:     { name: "Tomato",             optLow: 18, optHigh: 30, minRain: 2.0, waterlogRisk: true,  droughtSensitive: true,  fungalRH: 70 },
+  groundnut:  { name: "Groundnut (Peanut)", optLow: 22, optHigh: 35, minRain: 2.0, waterlogRisk: true,  droughtSensitive: false, fungalRH: 85 },
+  sugarcane:  { name: "Sugarcane",          optLow: 20, optHigh: 38, minRain: 3.0, waterlogRisk: false, droughtSensitive: true,  fungalRH: 80 },
+};
+
+// ---- Objective 1: process readings --------------------------------------
+function readValues() {
+  const values = {};
+  for (const field of Object.keys(LIMITS)) {
+    const raw = document.getElementById(field).value.trim();
+    if (raw === "") throw new Error(`Enter a value for ${field.replace(/_/g," ")}.`);
+    const n = Number(raw);
+    if (!Number.isFinite(n)) throw new Error(`${field.replace(/_/g," ")} must be a number.`);
+    const [lo, hi] = LIMITS[field];
+    if (n < lo || n > hi) throw new Error(`${field.replace(/_/g," ")} must be between ${lo} and ${hi}.`);
+    values[field] = n;
+  }
+  return values;
+}
+
+function classify(v) {
+  const t = v.temperature_c, r = v.rainfall_mm, h = v.humidity_pct, w = v.wind_speed_kmh;
+  let rain;
+  if      (r >= T.VHEAVY) rain = "very_heavy";
+  else if (r >= T.HEAVY)  rain = "heavy";
+  else if (r < T.DRY)     rain = "dry";
+  else                    rain = "moderate";
+  return {
+    temperature: t <= T.COLD ? "cold" : t >= T.HEAT ? "heat" : "comfortable",
+    rainfall: rain,
+    humidity: h >= T.HHIGH ? "high" : h <= T.HLOW ? "low" : "moderate",
+    wind: w >= T.WIND ? "strong" : "calm",
+  };
+}
+
+// ---- Objective 2: rule-based NLG ----------------------------------------
+const wet = (c) => c === "heavy" || c === "very_heavy";
+
+function irrigation(v, c) {
+  const name = "Irrigation", t = v.temperature_c, r = v.rainfall_mm, h = v.humidity_pct;
+  if (wet(c.rainfall)) return { name, status: "AVOID", reason: `Heavy rain (${r} mm) already supplies water. Irrigating now wastes water and can waterlog the field.` };
+  const needs = [];
+  if (c.rainfall === "dry")       needs.push(`only ${r} mm of rain`);
+  if (c.temperature === "heat")   needs.push(`temperature is ${t} °C`);
+  if (c.humidity === "low")       needs.push(`humidity is ${h}%`);
+  if (needs.length) return { name, status: "GO", reason: "Crops are losing water fast: " + needs.join("; ") + ". Irrigate early morning or evening." };
+  return { name, status: "CAUTION", reason: `Rain of ${r} mm and moderate conditions. Check soil moisture before irrigating.` };
+}
+function spraying(v, c) {
+  const name = "Pesticide or herbicide spraying", t = v.temperature_c, r = v.rainfall_mm, w = v.wind_speed_kmh;
+  if (c.wind === "strong") return { name, status: "AVOID", reason: `Wind of ${w} km/h will carry spray onto neighbouring fields and away from the crop.` };
+  if (c.rainfall !== "dry") return { name, status: "AVOID", reason: `Rain of ${r} mm will wash the spray off before it works.` };
+  if (c.temperature === "heat") return { name, status: "CAUTION", reason: `At ${t} °C spray dries quickly and can scorch leaves. Spray early morning or late evening.` };
+  return { name, status: "GO", reason: "Calm and dry. Good conditions for spraying at the label dose." };
+}
+function fertilizer(v, c) {
+  const name = "Fertilizer application", t = v.temperature_c, r = v.rainfall_mm;
+  if (wet(c.rainfall)) return { name, status: "AVOID", reason: `Heavy rain (${r} mm) will wash fertilizer out of the root zone.` };
+  if (c.rainfall === "moderate") return { name, status: "CAUTION", reason: `Rain of ${r} mm may wash some fertilizer away. Apply only if more rain is not expected today.` };
+  if (c.temperature === "heat") return { name, status: "CAUTION", reason: `At ${t} °C fertilizer can burn roots on dry soil. Water it in after applying.` };
+  return { name, status: "GO", reason: "Dry soil and calm weather. Apply, then water in lightly." };
+}
+function fieldWork(v, c) {
+  const name = "Field work (weeding, harvesting)", t = v.temperature_c, r = v.rainfall_mm;
+  if (wet(c.rainfall)) return { name, status: "AVOID", reason: `Heavy rain (${r} mm) waterlogs fields and makes them unsafe to work.` };
+  if (c.temperature === "heat") return { name, status: "CAUTION", reason: `At ${t} °C, work in the early morning and take frequent breaks.` };
+  if (c.rainfall === "moderate") return { name, status: "CAUTION", reason: `Rain of ${r} mm makes fields slippery. Start on the drier plots.` };
+  return { name, status: "GO", reason: "Good conditions for weeding and harvesting." };
+}
+function sowing(v, c) {
+  const name = "Sowing or transplanting", t = v.temperature_c, r = v.rainfall_mm;
+  if (c.rainfall === "very_heavy") return { name, status: "AVOID", reason: `Very heavy rain (${r} mm) washes seed out and waterlogs the seedbed.` };
+  if (c.temperature === "cold") return { name, status: "AVOID", reason: `At ${t} °C seed germinates slowly and young seedlings are easily chilled.` };
+  if (c.temperature === "heat") return { name, status: "CAUTION", reason: `At ${t} °C seedbeds dry out quickly. Water the seedbed after sowing.` };
+  if (c.rainfall === "heavy") return { name, status: "CAUTION", reason: `Heavy rain (${r} mm) can crust the seedbed. Sow once the soil has drained.` };
+  return { name, status: "GO", reason: "Soil temperature and moisture suit sowing or transplanting." };
+}
+const RULES = [irrigation, spraying, fertilizer, fieldWork, sowing];
+
+function alertsFor(v, c) {
+  const out = [], t = v.temperature_c, r = v.rainfall_mm, w = v.wind_speed_kmh;
+  if (c.temperature === "heat") out.push(`Heat stress (${t} °C): irrigate in the early morning or evening and shade seedlings and young plants.`);
+  if (c.temperature === "cold") out.push(`Cold stress (${t} °C): protect young plants from cold, for example by covering them at night.`);
+  if (c.rainfall === "very_heavy") out.push(`Very heavy rain (${r} mm): check field drainage and do not apply fertilizer.`);
+  if (c.wind === "strong") out.push(`Strong wind (${w} km/h): do not spray pesticides or herbicides, because drift wastes product and harms nearby crops.`);
+  return out;
+}
+function notesFor(v, c) {
+  const out = [];
+  if (c.humidity === "high") out.push(`High humidity (${v.humidity_pct}%) raises the risk of fungal disease. Scout crops for leaf spots and mildew.`);
+  return out;
+}
+
+// ---- Crop-specific notes (mirror crop_advisory.py) ----------------------
+function cropNotesFor(v, cropKey) {
+  if (!cropKey) return [];
+  const cp = CROP_PROFILES[cropKey];
+  if (!cp) return [];
+  const notes = [], t = v.temperature_c, r = v.rainfall_mm, h = v.humidity_pct;
+  // Temperature
+  if (t < cp.optLow)  notes.push(`${cp.name} grows best above ${cp.optLow} °C. At ${t} °C growth slows and yield may fall.`);
+  if (t > cp.optHigh) notes.push(`${cp.name} grows best below ${cp.optHigh} °C. At ${t} °C heat stress reduces grain or fruit set.`);
+  // Rain
+  if (r < cp.minRain && cp.droughtSensitive)
+    notes.push(`${cp.name} is drought-sensitive. With only ${r} mm today, irrigate to maintain soil moisture around the root zone.`);
+  if (r >= 20 && cp.waterlogRisk)
+    notes.push(`${cp.name} is sensitive to waterlogging. Check drainage channels urgently — ${r} mm risks standing water.`);
+  // Humidity
+  if (h >= cp.fungalRH)
+    notes.push(`Humidity of ${h}% exceeds the threshold for ${cp.name} (${cp.fungalRH}%). Scout for fungal lesions and apply a registered fungicide if symptoms appear.`);
+  return notes;
+}
+
+function buildPlan(v) {
+  const c = classify(v);
+  return { classes: c, alerts: alertsFor(v, c), activities: RULES.map(r => r(v, c)), notes: notesFor(v, c) };
+}
+
+// ---- Objective 3: render the plan ---------------------------------------
+function el(tag, text, cls) {
+  const node = document.createElement(tag);
+  if (text != null) node.textContent = text;
+  if (cls) node.className = cls;
+  return node;
+}
+
+function renderTags(c) {
+  document.getElementById("tag-temperature_c").textContent = LABELS.temperature[c.temperature];
+  document.getElementById("tag-rainfall_mm").textContent   = LABELS.rainfall[c.rainfall];
+  document.getElementById("tag-humidity_pct").textContent  = LABELS.humidity[c.humidity];
+  document.getElementById("tag-wind_speed_kmh").textContent = LABELS.wind[c.wind];
+}
+
+function render(v) {
+  const plan    = buildPlan(v);
+  const cropKey = document.getElementById("crop-select").value;
+  const cnotes  = cropNotesFor(v, cropKey);
+  renderTags(plan.classes);
+  const result = document.getElementById("result");
+  result.replaceChildren();
+
+  const counts = { GO: 0, CAUTION: 0, AVOID: 0 };
+  plan.activities.forEach(a => counts[a.status]++);
+
+  // Header line — include crop name when selected
+  const cropName = cropKey && CROP_PROFILES[cropKey] ? ` for ${CROP_PROFILES[cropKey].name}` : "";
+  result.append(el("p",
+    `${counts.GO} to go, ${counts.CAUTION} with care, ${counts.AVOID} to hold off today${cropName}.`,
+    "summary"));
+
+  if (plan.alerts.length) {
+    const list = el("ul", null, "alerts");
+    plan.alerts.forEach(text => list.append(el("li", text)));
+    result.append(list);
+  }
+
+  const list = el("ul", null, "plan");
+  for (const a of plan.activities) {
+    const li = document.createElement("li");
+    const left = el("div");
+    left.append(el("span", STATUS_TEXT[a.status], `pill ${a.status}`));
+    const right = el("div");
+    right.append(el("div", a.name, "act"), el("div", a.reason, "why"));
+    li.append(left, right);
+    list.append(li);
+  }
+  result.append(list);
+
+  if (plan.notes.length) {
+    const box = el("div", null, "notes");
+    plan.notes.forEach(text => box.append(el("p", text)));
+    result.append(box);
+  }
+
+  if (cnotes.length) {
+    const box = el("div", null, "crop-notes");
+    const h3  = el("h3", `${CROP_PROFILES[cropKey].name} — Crop-Specific Notes`);
+    box.append(h3);
+    cnotes.forEach(text => box.append(el("p", text)));
+    result.append(box);
+  }
+}
+
+// ---- Form handling ------------------------------------------------------
+const form     = document.getElementById("form");
+const errorBox = document.getElementById("error");
+
+function setError(message) {
+  errorBox.textContent = message;
+  errorBox.classList.toggle("show", Boolean(message));
+}
+function setReadings(values) {
+  for (const [field, value] of Object.entries(values)) {
+    document.getElementById(field).value = value;
+  }
+}
+function refresh() {
+  try { const v = readValues(); setError(""); render(v); }
+  catch (err) { setError(err.message); }
+}
+
+form.addEventListener("submit", e => { e.preventDefault(); refresh(); });
+form.addEventListener("input", refresh);
+document.getElementById("crop-select").addEventListener("change", refresh);
+document.querySelectorAll("[data-preset]").forEach(btn =>
+  btn.addEventListener("click", () => { setReadings(PRESETS[btn.dataset.preset]); refresh(); }));
+
+// ---- Dark / light theme toggle ------------------------------------------
+const themeToggle = document.getElementById("theme-toggle");
+function applyTheme(dark) {
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  themeToggle.textContent = dark ? "☀️" : "🌙";
+  themeToggle.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+}
+themeToggle.addEventListener("click", () => {
+  const isDark = document.documentElement.dataset.theme === "dark";
+  applyTheme(!isDark);
+  localStorage.setItem("theme", !isDark ? "dark" : "light");
+});
+// Restore saved theme
+const saved = localStorage.getItem("theme");
+if (saved) applyTheme(saved === "dark");
+
+// ---- Live weather from Open-Meteo (free, no key) ------------------------
+const liveForm   = document.getElementById("live-form");
+const liveStatus = document.getElementById("live-status");
+const liveError  = document.getElementById("live-error");
+
+function setLive(status, error) {
+  liveStatus.textContent = status || "";
+  liveError.textContent  = error  || "";
+  liveError.classList.toggle("show", Boolean(error));
+}
+
+async function getJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`weather service returned HTTP ${res.status}`);
+  return res.json();
+}
+
+async function geocodePlace(name) {
+  const url = "https://geocoding-api.open-meteo.com/v1/search?" +
+    new URLSearchParams({ name, count: "1" });
+  const data = await getJSON(url);
+  const top  = (data.results || [])[0];
+  if (!top) throw new Error(`no location found for "${name}"`);
+  return { lat: top.latitude, lon: top.longitude, label: top.name };
+}
+
+function readingsFromForecast(data) {
+  const rain = data.daily.precipitation_sum[0];
+  return {
+    temperature_c:   data.current.temperature_2m,
+    rainfall_mm:     rain == null ? 0 : rain,
+    humidity_pct:    data.current.relative_humidity_2m,
+    wind_speed_kmh:  data.current.wind_speed_10m,
+  };
+}
+
+// Build a readings object from one day of a multi-day daily forecast.
+function dayReadings(daily, i) {
+  const rain  = daily.precipitation_sum[i];
+  const tmax  = (daily.temperature_2m_max || [])[i];
+  const humid = (daily.relative_humidity_2m_max || [])[i];
+  const wind  = (daily.wind_speed_10m_max || [])[i];
+  return {
+    temperature_c:  tmax  != null ? tmax  : 25,
+    rainfall_mm:    rain  != null ? rain  : 0,
+    humidity_pct:   humid != null ? humid : 60,
+    wind_speed_kmh: wind  != null ? wind  : 10,
+  };
+}
+
+function renderOutlook(data) {
+  const daily = data.daily;
+  const dates = daily.time || [];
+  const tbody = document.getElementById("outlook-body");
+  tbody.replaceChildren();
+
+  dates.forEach((date, i) => {
+    const v   = dayReadings(daily, i);
+    const c   = classify(v);
+    const counts = { GO: 0, CAUTION: 0, AVOID: 0 };
+    RULES.forEach(rule => counts[rule(v, c).status]++);
+
+    const tr = document.createElement("tr");
+    const dateLabel = i === 0 ? `${date} (Today)` : i === 1 ? `${date} (Tomorrow)` : date;
+
+    // coloured bar: GO (green), CAUTION (amber), AVOID (red)
+    const bar = document.createElement("td");
+    for (const [st, n] of Object.entries(counts)) {
+      for (let k = 0; k < n; k++) {
+        const dot = document.createElement("span");
+        dot.className = `dot ${st}`;
+        bar.append(dot);
+      }
+    }
+    bar.append(` ${counts.GO}✓ ${counts.CAUTION}⚠ ${counts.AVOID}✕`);
+
+    tr.innerHTML = `<td>${dateLabel}</td><td>${v.temperature_c}</td><td>${v.rainfall_mm}</td><td>${v.humidity_pct}</td><td>${v.wind_speed_kmh}</td>`;
+    tr.append(bar);
+    tbody.append(tr);
+  });
+
+  document.getElementById("outlook-section").style.display = "";
+}
+
+async function fetchReadings(lat, lon) {
+  const url = "https://api.open-meteo.com/v1/forecast?" + new URLSearchParams({
+    latitude: String(lat), longitude: String(lon),
+    current: "temperature_2m,relative_humidity_2m,wind_speed_10m",
+    daily:   "precipitation_sum,temperature_2m_max,temperature_2m_min,relative_humidity_2m_max,wind_speed_10m_max",
+    forecast_days: "7", timezone: "auto",
+  });
+  return getJSON(url);
+}
+
+async function loadLive(lat, lon, label) {
+  setLive("Fetching weather…", "");
+  try {
+    const data = await fetchReadings(lat, lon);
+    setReadings(readingsFromForecast(data));
+    setLive(`Showing today's weather for ${label}.`, "");
+    refresh();
+    renderOutlook(data);
+  } catch (err) {
+    setLive("", `Could not fetch weather: ${err.message}`);
+  }
+}
+
+liveForm.addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = document.getElementById("place").value.trim();
+  if (!name) { setLive("", "Enter a place name, or use your location."); return; }
+  setLive("Looking up the place…", "");
+  try {
+    const place = await geocodePlace(name);
+    await loadLive(place.lat, place.lon, place.label);
+  } catch (err) {
+    setLive("", `Could not find that place: ${err.message}`);
+  }
+});
+
+document.getElementById("locate").addEventListener("click", () => {
+  if (!navigator.geolocation) {
+    setLive("", "This browser cannot share its location. Type a place name instead.");
+    return;
+  }
+  setLive("Waiting for permission to read your location…", "");
+  navigator.geolocation.getCurrentPosition(
+    pos => loadLive(pos.coords.latitude, pos.coords.longitude, "your location"),
+    ()  => setLive("", "Location was not shared. Type a place name instead."),
+    { timeout: 15000 }
+  );
+});
+
+// Start on the mild sample day.
+setReadings(PRESETS.normal);
+refresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# No third-party packages are required.
+# The entire project uses Python's standard library only (Python 3.8+).
+#
+# To run the tests:
+#   python -m unittest -v test_advisory test_fetch_weather test_crop_advisory
